@@ -92,3 +92,21 @@ Wrote 200,000+ characters to exact_match_live.html
 ```
 
 If the request fails with a Google anti-abuse page, retry with a proxy or a fresh browser-like session.
+
+## Run The API
+
+```powershell
+uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+Local test:
+
+```powershell
+curl "http://127.0.0.1:8000/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg.com%2Fimages%2Fg%2FapsAAeSw1URp7CAK%2Fs-l1600.webp" -o api_exact_match.html
+```
+
+Health check:
+
+```powershell
+curl "http://127.0.0.1:8000/health"
+```
