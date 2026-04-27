@@ -76,14 +76,19 @@ Remove-Item Env:SSLKEYLOGFILE
 
 - `har_analyzer.py` ranks likely Google Lens bootstrap/session requests from a HAR export.
 - `lens_client.py` contains the direct-flow skeleton.
+- `test_lens_flow.py` runs the reverse-engineered flow for one image URL and saves the HTML.
 - `requirements.txt` contains Python dependencies.
 
-## Implementation Boundary
+## Test The Direct Flow
 
-The missing reverse-engineered piece is:
-
-```python
-create_lens_session(client, image_url)
+```powershell
+python test_lens_flow.py "https://i.ebayimg.com/images/g/apsAAeSw1URp7CAK/s-l1600.webp"
 ```
 
-Once the HAR reveals the request that creates `vsrid`, `gsessionid`, and `lsessionid`, implement that request and parser in `lens_client.py`.
+Expected output:
+
+```text
+Wrote 200,000+ characters to exact_match_live.html
+```
+
+If the request fails with a Google anti-abuse page, retry with a proxy or a fresh browser-like session.
