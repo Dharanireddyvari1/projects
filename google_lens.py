@@ -36,8 +36,8 @@ def build_headers(ua: str) -> dict:
 
 
 def get_exact_match_html(image_url: str, proxy: str = None, retries: int = 3) -> str:
-    ua = random.choice(USER_AGENTS)
-    headers = build_headers(ua)
+    ua = random.choice(USER_AGENTS) # rotate user agent for each request to avoid looking like a bot
+    headers = build_headers(ua) # build headers with the chosen user agent : Realistic browser headers
 
     proxies = {"http://": proxy, "https://": proxy} if proxy else None
 
@@ -57,7 +57,8 @@ def get_exact_match_html(image_url: str, proxy: str = None, retries: int = 3) ->
             if attempt > 0:
                 time.sleep(random.uniform(2, 5))
 
-            with httpx.Client(headers=headers, proxies=proxies, timeout=45) as client:
+            with httpx.Client(headers=headers, proxies=proxies, timeout=45) as client: # Cookie/session reuse, realistic headers, and proxy support for better reliability
+
                 resp = client.get(
                     f"{upload_url}?{urlencode(upload_params)}",
                     follow_redirects=False,

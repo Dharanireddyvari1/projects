@@ -12,8 +12,9 @@ app = FastAPI(title="Google Lens Exact Match API")
 
 # drop your proxy list here, one per line e.g. "http://user:pass@host:port"
 # or set PROXY_LIST env var as a comma-separated string
-RAW_PROXIES = os.getenv("PROXY_LIST", "")
+RAW_PROXIES = os.getenv("PROXY_LIST", "") 
 PROXIES = [p.strip() for p in RAW_PROXIES.split(",") if p.strip()]
+print(f"Loaded {len(PROXIES)} proxies")
 
 
 @app.get("/google-lens", response_class=HTMLResponse)
