@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+bodydump.html
+*.har
+*_exact_match.html

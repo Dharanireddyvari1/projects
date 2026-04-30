@@ -1,57 +1,87 @@
 # Google Lens Exact Match API
 
-Reverse-engineers the Google Lens upload flow to return Exact Match result HTML — no browser required.
+Reverse-engineered API for returning raw Google Lens Exact Match HTML from an image URL.
 
 ## Approach
 
-Instead of launching a browser, the API hits `lens.google.com/v3/upload` directly with the image URL as a query param. Google redirects to `google.com/search` with session tokens (`vsrid`, `gsessionid`, etc.). We append `udm=48` to that URL which switches to the Exact Match tab, then return the HTML.
+The API does not reuse copied Exact Match URLs because those URLs expire quickly. Instead, each request creates a fresh Lens session:
 
-This is faster and more stable than browser automation because there's no Chromium overhead.
+```text
+imageUrl
+-> lens.google.com/v3/upload
+-> Google Search redirect with vsrid, gsessionid, lsessionid
+-> switch udm to 48 for Exact Match
+-> fetch and return raw HTML
+```
 
 ## Setup
 
-```bash
-pip install httpx fastapi uvicorn
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-## Run locally
+## Environment
 
-```bash
+Create a local `.env` file. Do not commit it.
+
+```env
+PROXY_LIST=http://user:pass@host:port,http://user:pass@host2:port
+MAX_CONCURRENCY=5
+REQUEST_DELAY_MIN=0.2
+REQUEST_DELAY_MAX=1.0
+```
+
+For Oxylabs Datacenter Proxies, use the proxy entrypoint and authenticated username/password format shown by the Oxylabs dashboard.
+
+## Run Locally
+
+```powershell
 python server.py
 ```
 
-API will be at `http://localhost:8000`.
+The API will run at:
 
-## With proxies
-
-Set a comma-separated proxy list before starting:
-
-```bash
-export PROXY_LIST="http://user:pass@host1:port,http://user:pass@host2:port"
-python server.py
+```text
+http://localhost:8000
 ```
 
-## Example call
+## Endpoints
 
+Health check:
+
+```text
+GET /health
 ```
-GET http://localhost:8000/google-lens?imageUrl=https://i.ebayimg.com/00/s/MTYwMFgxNjAw/z/BVcAAOSwS9m4zOb/$_57.JPG
+
+Proxy check:
+
+```text
+GET /proxy-health
 ```
 
-Response: raw HTML string of the Exact Match results page.
+Google Lens Exact Match:
 
-## Expose via ngrok
+```text
+GET /google-lens?imageUrl=https://example.com/image.jpg
+```
 
-```bash
+The response body is the raw Exact Match HTML.
+
+## Anti-Bot Strategy
+
+- Uses a persistent `httpx.Client` per image flow so cookies are preserved.
+- Rotates consistent browser profiles: User-Agent, client hints, platform, and viewport.
+- Rotates through the configured proxy pool and fails over when a proxy is unavailable.
+- Uses random request delays and a server-side concurrency limit.
+- Detects Google `/sorry/`, unusual-traffic, and CAPTCHA responses.
+- Manually follows the Lens redirect chain to generate fresh session parameters.
+
+## Expose With Ngrok
+
+```powershell
 ngrok http 8000
 ```
 
-## Anti-bot strategy
-
-- Rotates User-Agent strings across common Chrome/Firefox versions
-- Random delays between retries (2–5s)
-- Proxy rotation via `PROXY_LIST` env var
-- Detects `/sorry/` redirects and CAPTCHA pages, retries on those
-
-## Max concurrency
-
-Depends on proxy pool size and server resources. With `workers=4` in uvicorn and a decent proxy list, ~10–20 concurrent requests is reasonable.
+Share the generated public URL and the configured `MAX_CONCURRENCY` value.
