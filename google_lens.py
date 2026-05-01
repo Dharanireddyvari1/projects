@@ -108,7 +108,7 @@ def get_exact_match_html(
         "vph": str(height),
     }
     first_url = f"{LENS_UPLOAD_URL}?{urlencode(upload_params)}"
-    failures = []  # accumulates per-proxy error messages for the final raised exception
+    failures = []  # accumulates per-prox   y error messages for the final raised exception
 
     # ---------------------------------------------------------------------------
     # Outer loop: try each proxy in the shuffled pool
