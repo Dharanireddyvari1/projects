@@ -1,18 +1,22 @@
 # Google Lens Exact Match API
 
-Reverse-engineered API for returning raw Google Lens Exact Match HTML from an image URL.
+This project builds a small FastAPI service that accepts an image URL, runs a reverse-engineered Google Lens flow, and returns the raw HTML from the Exact Match results page.
 
 ## Approach
 
-The API does not reuse copied Exact Match URLs because those URLs expire quickly. Instead, each request creates a fresh Lens session:
+The final Exact Match URL copied from the browser is not reusable because it contains short-lived session values such as `vsrid`, `gsessionid`, and `lsessionid`.
+
+Instead, this API creates a fresh Lens session for every request:
 
 ```text
 imageUrl
--> lens.google.com/v3/upload
--> Google Search redirect with vsrid, gsessionid, lsessionid
--> switch udm to 48 for Exact Match
--> fetch and return raw HTML
+-> https://lens.google.com/v3/upload
+-> Google redirects to /search with fresh Lens session parameters
+-> the script changes udm to 48 for Exact Match
+-> the API returns the resulting HTML
 ```
+
+The main scraping logic is in `google_lens_1.py`. The API server is in `server_1.py`.
 
 ## Setup
 
@@ -24,7 +28,9 @@ pip install -r requirements.txt
 
 ## Environment
 
-Create a local `.env` file. Do not commit it.
+Create a `.env` file in the project folder. Do not commit this file because it contains proxy credentials.
+
+Example:
 
 ```env
 PROXY_LIST=http://user:pass@host:port,http://user:pass@host2:port
@@ -33,55 +39,58 @@ REQUEST_DELAY_MIN=0.2
 REQUEST_DELAY_MAX=1.0
 ```
 
-For Oxylabs Datacenter Proxies, use the proxy entrypoint and authenticated username/password format shown by the Oxylabs dashboard.
+For Oxylabs Datacenter Proxies, use the proxy username, password, host, and port format shown in the Oxylabs dashboard.
 
 ## Run Locally
 
 ```powershell
-python server.py
+python server_1.py
 ```
 
-The API will run at:
+The API runs on:
 
 ```text
 http://localhost:8000
 ```
 
-## Endpoints
-
-Health check:
+## API Endpoint
 
 ```text
-GET /health
+GET /google-lens?imageUrl={image_url}
 ```
 
-Proxy check:
+Example:
 
-```text
-GET /proxy-health
+```powershell
+curl.exe "http://127.0.0.1:8000/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg.com%2Fimages%2Fg%2FbRoAAeSwDgxp5kQn%2Fs-l1600.webp" -o exact_match.html
 ```
 
-Google Lens Exact Match:
+The response body is the raw HTML from the Exact Match results page.
 
-```text
-GET /google-lens?imageUrl=https://example.com/image.jpg
-```
+## Anti-Bot Handling
 
-The response body is the raw Exact Match HTML.
+The implementation includes:
 
-## Anti-Bot Strategy
+- Browser-like request headers.
+- Rotating browser profiles with matching User-Agent, client hints, platform, and viewport.
+- Proxy rotation through `PROXY_LIST`.
+- One `httpx.Client` per image flow so cookies stay consistent.
+- Random delays between requests and retries.
+- A server-side concurrency limit using `MAX_CONCURRENCY`.
+- Basic detection for Google `/sorry/`, unusual traffic, and CAPTCHA pages.
 
-- Uses a persistent `httpx.Client` per image flow so cookies are preserved.
-- Rotates consistent browser profiles: User-Agent, client hints, platform, and viewport.
-- Rotates through the configured proxy pool and fails over when a proxy is unavailable.
-- Uses random request delays and a server-side concurrency limit.
-- Detects Google `/sorry/`, unusual-traffic, and CAPTCHA responses.
-- Manually follows the Lens redirect chain to generate fresh session parameters.
+## Hosting
 
-## Expose With Ngrok
+To expose the local API for testing:
 
 ```powershell
 ngrok http 8000
 ```
 
-Share the generated public URL and the configured `MAX_CONCURRENCY` value.
+Share the generated ngrok URL and the configured `MAX_CONCURRENCY` value.
+
+## Notes
+
+- The API does not store or reuse copied Google Exact Match URLs.
+- Each request generates a new Lens session from the provided image URL.
+- Free or trial proxies may fail sometimes, so proxy retries are expected.

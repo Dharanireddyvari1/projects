@@ -6,7 +6,6 @@ import re
 import threading
 import time
 
-import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
