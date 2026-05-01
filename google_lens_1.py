@@ -3,11 +3,12 @@ __author__ = "Dharani Reddyvari"
 import random
 import time
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-
 import httpx
 
 LENS_UPLOAD_URL = "https://lens.google.com/v3/upload"
 
+
+# Browser profiles with actual user agents, client hints, and viewport sizes
 BROWSER_PROFILES = [
     {
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
@@ -29,7 +30,7 @@ BROWSER_PROFILES = [
     },
 ]
 
-
+# Handles redirects and fetches the actual Exact Match HTML from Google Search
 def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, height: int) -> str:
     
     upload_params = {
@@ -55,6 +56,7 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
             if not location:
                 raise RuntimeError(f"No redirect from Lens (status {response.status_code})")
 
+            print(f"Redirected to: {location}")
             if location.startswith("/"):
                 location = f"https://www.google.com{location}"
 
@@ -75,11 +77,10 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
         if missing:
             raise RuntimeError(f"Search URL missing required params: {', '.join(missing)}")
 
-        # udm=48 switches to the Exact Match tab
-        query["udm"] = ["48"]
+        query["udm"] = ["48"]  # udm=48 switches to the Exact Match tab
         exact_url = urlunparse(parsed_search._replace(query=urlencode(query, doseq=True)))
 
-        time.sleep(random.uniform(0.6, 1.8))
+        time.sleep(random.uniform(0.6, 1.8)) # Delay before hitting Search to reduce bot detection risk
 
         exact_response = client.get(exact_url, follow_redirects=True)
         exact_response.raise_for_status()
@@ -87,15 +88,17 @@ def fetch_exact_match_html(image_url: str, proxy, headers: dict, width: int, hei
         html = exact_response.text
         lower_html = html.lower()
 
+        # If Google detects us as bot or lands on a CAPTCHA page
         if "/sorry/" in str(exact_response.url) or "unusual traffic" in lower_html or "captcha" in lower_html:
             raise RuntimeError("Hit Google anti-bot page")
 
+        # Sanity check to confirm that we are landing on Google Search results page
         if "searchresultspage" not in lower_html and "<title>google search" not in lower_html:
             raise RuntimeError("Response did not look like Search result HTML")
 
         return html
 
-
+# Function that tries multiple proxies and get browser profile for each request
 def exact_match_html(image_url: str, proxies: list[str] | None = None) -> str:
     
     profile = random.choice(BROWSER_PROFILES)

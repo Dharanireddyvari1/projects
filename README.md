@@ -1,22 +1,20 @@
 # Google Lens Exact Match API
 
-This project builds a small FastAPI service that accepts an image URL, runs a reverse-engineered Google Lens flow, and returns the raw HTML from the Exact Match results page.
+A FastAPI service that takes an image URL, runs it through Google Lens, and hands back the raw HTML from the Exact Match search page.
 
-## Approach
+## Why This Exists
 
-The final Exact Match URL copied from the browser is not reusable because it contains short-lived session values such as `vsrid`, `gsessionid`, and `lsessionid`.
+If you've ever tried copying a Lens URL from your browser and reusing it, you know it stops working almost immediately. The URL contains temporary session values (`vsrid`, `gsessionid`, `lsessionid`) that expire fast. This service works around that by spinning up a fresh Lens session for every single request instead of trying to reuse stale ones.
 
-Instead, this API creates a fresh Lens session for every request:
+The flow looks like this:
 
-```text
-imageUrl
--> https://lens.google.com/v3/upload
--> Google redirects to /search with fresh Lens session parameters
--> the script changes udm to 48 for Exact Match
--> the API returns the resulting HTML
-```
+`image URL → lens.google.com/v3/upload → follow redirects → get /search URL → switch to udm=48 (Exact Match) → return HTML `
 
-The main scraping logic is in `google_lens_1.py`. The API server is in `server_1.py`.
+## Project Files
+
+- `server_1.py` — the FastAPI server
+- `google_lens_1.py` — the Lens scraping logic
+- `run_csv_load_test.ps1` — optional load test script for batch testing locally
 
 ## Setup
 
@@ -26,71 +24,85 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Environment
-
-Create a `.env` file in the project folder. Do not commit this file because it contains proxy credentials.
-
-Example:
+Create a `.env` file in the project root with your config (don't commit this):
 
 ```env
 PROXY_LIST=http://user:pass@host:port,http://user:pass@host2:port
 MAX_CONCURRENCY=5
-REQUEST_DELAY_MIN=0.2
-REQUEST_DELAY_MAX=1.0
+REQUEST_DELAY_MIN=0.5
+REQUEST_DELAY_MAX=2.0
 ```
 
-For Oxylabs Datacenter Proxies, use the proxy username, password, host, and port format shown in the Oxylabs dashboard.
+**`PROXY_LIST`** — comma-separated proxy URLs. Oxylabs Datacenter proxies work well here; use the exact credentials/host/port from your dashboard.  
+**`MAX_CONCURRENCY`** — how many requests can run in parallel before the semaphore starts blocking.  
+**`REQUEST_DELAY_MIN` / `REQUEST_DELAY_MAX`** — random delay range (in seconds) injected before each scrape attempt.
 
-## Run Locally
+## Running It
 
 ```powershell
-python server_1.py
+python -m server_1
 ```
 
-The API runs on:
+- Local base URL: `http://127.0.0.1:8000`
+- Swagger docs: `http://127.0.0.1:8000/docs`
 
-```text
-http://localhost:8000
-```
+## API
 
-## API Endpoint
+`GET /google-lens?imageUrl={public_image_url}`
 
-```text
-GET /google-lens?imageUrl={image_url}
-```
-
-Example:
-
+**Local:**
 ```powershell
-curl.exe "http://127.0.0.1:8000/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg.com%2Fimages%2Fg%2FbRoAAeSwDgxp5kQn%2Fs-l1600.webp" -o exact_match.html
+curl.exe "http://127.0.0.1:8000/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg.com%2Fimages%2Fg%2FbRoAAeSwDgxp5kQn%2Fs-l1600" -o exact_match.html
 ```
 
-The response body is the raw HTML from the Exact Match results page.
-
-## Anti-Bot Handling
-
-The implementation includes:
-
-- Browser-like request headers.
-- Rotating browser profiles with matching User-Agent, client hints, platform, and viewport.
-- Proxy rotation through `PROXY_LIST`.
-- One `httpx.Client` per image flow so cookies stay consistent.
-- Random delays between requests and retries.
-- A server-side concurrency limit using `MAX_CONCURRENCY`.
-- Basic detection for Google `/sorry/`, unusual traffic, and CAPTCHA pages.
-
-## Hosting
-
-To expose the local API for testing:
-
+**Hosted on Render:**
 ```powershell
-ngrok http 8000
+curl.exe "https://projects-54k7.onrender.com/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg.com%2Fimages%2Fg%2FbRoAAeSwDgxp5kQn%2Fs-l1600" -o exact_match.html
 ```
 
-Share the generated ngrok URL and the configured `MAX_CONCURRENCY` value.
+A `200` gives you back raw HTML (`text/html`). Other status codes you might see:
 
-## Notes
+| Code | Meaning |
+|------|---------|
+| `400` | Bad `imageUrl` |
+| `429` | Too many concurrent requests |
+| `502` | Proxy/Lens/Google blocked or redirect failed |
+| `500` | Something unexpected went wrong |
 
-- The API does not store or reuse copied Google Exact Match URLs.
-- Each request generates a new Lens session from the provided image URL.
-- Free or trial proxies may fail sometimes, so proxy retries are expected.
+## Testing
+
+**Quick sanity check** — just open this in your browser or Postman while the server is running:
+
+`http://127.0.0.1:8000/google-lens?imageUrl=https%3A%2F%2Fi.ebayimg com%2Fimages%2Fg%2FbRoAAeSwDgxp5kQn%2Fs-l1600`
+
+You should get a `200` with `text/html` content.
+
+**Batch test from a CSV:**
+```powershell
+.\run_csv_load_test.ps1 -CsvPath .\urls_10.csv -SaveHtml -OutputDir .\results
+```
+
+This saves per-request HTML files into `results/` and dumps summary + detail CSVs.
+
+## How Anti-Bot Works
+
+Google will block you if you're not careful. A few things this service does to stay under the radar:
+
+- Browser-realistic headers and client hints
+- Rotating user agents, platforms, and viewport sizes
+- Proxy rotation with retries across the full `PROXY_LIST`
+- One `httpx.Client` per request to preserve cookie/session state across the redirect chain
+- Manual redirect walking (not auto-follow) so we can capture the session params we need
+- Random delays between requests
+- Concurrency limiting via semaphore
+- Basic detection for Google's block pages (`/sorry/`, CAPTCHA markers, "unusual traffic" pages)
+
+Proxy quality makes a big difference here. Cheap proxies will get blocked faster and tank your success rate.
+
+## Deployment
+
+Hosted on Render at `https://projects-54k7.onrender.com`. The public endpoint is:
+
+`https://projects-54k7.onrender.com/google-lens`
+
+Concurrency on the hosted instance is controlled by `MAX_CONCURRENCY` in the environment config.
