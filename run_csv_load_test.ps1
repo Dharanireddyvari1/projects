@@ -1,5 +1,5 @@
 param(
-    [string]$CsvPath = ".\input_urls.csv",
+    [string]$CsvPath = ".\urls_1000.csv",
 
     [string]$ApiBaseUrl = "http://127.0.0.1:8000",
 
@@ -26,7 +26,7 @@ if ($SaveHtml) {
 
 # Fail fast if the API is down so the script doesn't run a full batch with 0 saves.
 try {
-    Invoke-WebRequest -Uri ("{0}/openapi.json" -f $ApiBaseUrl.TrimEnd('/')) -TimeoutSec 10 -ErrorAction Stop | Out-Null
+    Invoke-WebRequest -Uri ("{0}/openapi.json" -f $ApiBaseUrl.TrimEnd('/')) -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop | Out-Null
 }
 catch {
     throw "API not reachable at $ApiBaseUrl. Start server_1 first (python -m server_1)."
@@ -85,7 +85,7 @@ foreach ($item in $items) {
         $apiUrl = "$apiBase/google-lens?imageUrl=$encoded"
 
         try {
-            $response = Invoke-WebRequest -Uri $apiUrl -TimeoutSec $timeoutSec
+            $response = Invoke-WebRequest -Uri $apiUrl -TimeoutSec $timeoutSec -UseBasicParsing
             $status = [int]$response.StatusCode
             $html = [string]$response.Content
             $savedFile = $null
