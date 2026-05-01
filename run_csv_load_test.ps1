@@ -24,6 +24,14 @@ if ($SaveHtml) {
     $resolvedOutputDir = (Resolve-Path $OutputDir).Path
 }
 
+# Fail fast if the API is down so the script doesn't run a full batch with 0 saves.
+try {
+    Invoke-WebRequest -Uri ("{0}/openapi.json" -f $ApiBaseUrl.TrimEnd('/')) -TimeoutSec 10 -ErrorAction Stop | Out-Null
+}
+catch {
+    throw "API not reachable at $ApiBaseUrl. Start server_1 first (python -m server_1)."
+}
+
 $rows = Import-Csv -Path $CsvPath
 if (-not $rows -or $rows.Count -eq 0) {
     throw "CSV is empty: $CsvPath"
@@ -168,6 +176,10 @@ $results | Sort-Object Index | Export-Csv -Path $resultsPath -NoTypeInformation 
 
 Write-Host "Saved summary: $summaryPath"
 Write-Host "Saved details: $resultsPath"
+
+if ($SaveHtml -and $htmlSaved -eq 0) {
+    Write-Warning "No HTML files were saved because there were no successful 200 responses. Check the latest results_*.csv Error column."
+}
 
 
 # .\run_csv_load_test.ps1 -SaveHtml -OutputDir .\results

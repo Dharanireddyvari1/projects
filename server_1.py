@@ -11,14 +11,18 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
-from google_lens_1 import get_exact_match_html
+from google_lens_1 import exact_match_html
 
 load_dotenv()
 
 app = FastAPI(title="Google Lens Exact Match API")
 
+PROXIES = []
 RAW_PROXIES = os.getenv("PROXY_LIST", "")
-PROXIES = [e.strip().strip("\"'") for e in re.split(r"[\s,]+", RAW_PROXIES) if e.strip()]
+for i in re.split(r"[\s,]+", RAW_PROXIES):
+    i = i.strip().strip("\"'")
+    if i:
+        PROXIES.append(i)
 
 MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "5"))
 REQUEST_DELAY_MIN = float(os.getenv("REQUEST_DELAY_MIN", "0.2"))
@@ -38,7 +42,7 @@ def google_lens(imageUrl: str = Query(..., description="Public image URL to sear
 
     try:
         time.sleep(random.uniform(REQUEST_DELAY_MIN, REQUEST_DELAY_MAX))
-        html = get_exact_match_html(imageUrl, proxies=PROXIES)
+        html = exact_match_html(imageUrl, proxies=PROXIES)
         return HTMLResponse(content=html, status_code=200)
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
